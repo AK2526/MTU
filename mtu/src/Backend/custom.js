@@ -94,7 +94,7 @@ export const getVocabularySuggestions = async (word, context) => {
     const prompt = `
 Given the word "${word}" used in this context: "${context}"
 
-Suggest 3-5 alternative words that:
+Suggest 3 alternative words that:
 1. Are slightly more advanced but still appropriate for children aged 8-12
 2. Have the same meaning as the original word
 3. Fit grammatically in the sentence

@@ -167,6 +167,81 @@
   font-size: 12px;
 }
 
+/* Synonym hover styles */
+.synonym-wrapper {
+  position: relative;
+  display: inline;
+}
+
+.synonym-word {
+  text-decoration: underline;
+  text-decoration-style: solid;
+  text-decoration-color: #f59e0b;
+  text-decoration-thickness: 2px;
+  cursor: help;
+  transition: all 0.2s ease;
+  background-color: rgba(245, 158, 11, 0.1);
+  border-radius: 3px;
+  padding: 1px 3px;
+}
+
+.synonym-word:hover {
+  background-color: rgba(245, 158, 11, 0.2);
+  text-decoration-color: #d97706;
+}
+
+.synonym-tooltip {
+  position: absolute;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.synonym-tooltip-content {
+  background-color: #1f2937;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.synonym-tooltip-title {
+  font-weight: 600;
+  color: #f59e0b;
+  font-size: 11px;
+}
+
+.synonym-list {
+  color: #e5e7eb;
+  font-size: 11px;
+}
+
+.synonym-item {
+  font-weight: 400;
+}
+
+/* Tooltip arrow pointing down */
+.synonym-tooltip-content::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #1f2937 transparent transparent transparent;
+}
+
+.synonym-loading {
+  color: #f59e0b;
+  font-size: 11px;
+  font-style: italic;
+}
+
 /* Animation */
 @keyframes fade-in {
   from {
@@ -192,5 +267,10 @@
   
   .app {
     padding: 8px;
+  }
+  
+  .synonym-tooltip-content {
+    max-width: 150px;
+    font-size: 11px;
   }
 }

@@ -1,7 +1,171 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 import CustomAIService from './Backend/custom';
+
+// Cache for storing Gemini-generated synonyms
+const SYNONYMS_CACHE = new Map();
+
+// Function to get synonyms from Gemini API
+const getSynonymsFromGemini = async (word) => {
+  // Check cache first
+  if (SYNONYMS_CACHE.has(word.toLowerCase())) {
+    return SYNONYMS_CACHE.get(word.toLowerCase());
+  }
+
+  try {
+    const response = await CustomAIService.getVocabularySuggestions(word, ""); // Empty context for standalone word lookup
+    
+    // // Parse the response to extract synonyms
+    // const synonymsText = response.response.trim();
+    // const synonyms = synonymsText.split(',').map(s => s.trim()).slice(0, 3);
+    
+    // // Cache the result
+    // SYNONYMS_CACHE.set(word.toLowerCase(), synonyms);
+    
+    return response; // Return the full response for now, can be adjusted later if needed
+  } catch (error) {
+    console.error('Error getting synonyms from Gemini:', error);
+    // Return empty array if API fails
+    return [];
+  }
+};
+
+// Component to render text with synonym tooltips (only for user entries)
+const SynonymText = ({ text, colorClass, enableSynonyms = false }) => {
+  const [hoveredWord, setHoveredWord] = useState(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const [synonyms, setSynonyms] = useState([]);
+  const [loadingSynonyms, setLoadingSynonyms] = useState(false);
+
+  const handleWordHover = async (e, word) => {
+    if (!enableSynonyms) return;
+    
+    setLoadingSynonyms(true);
+    setHoveredWord(word.toLowerCase());
+    
+    const rect = e.target.getBoundingClientRect();
+    const parentRect = e.target.closest('.entry-content').getBoundingClientRect();
+    setTooltipPosition({
+      x: rect.left + rect.width / 2 - parentRect.left,
+      y: rect.top - parentRect.top - 5
+    });
+
+    const wordSynonyms = await getSynonymsFromGemini(word);
+    setSynonyms(wordSynonyms);
+    setLoadingSynonyms(false);
+  };
+
+  const handleWordLeave = () => {
+    setHoveredWord(null);
+    setSynonyms([]);
+    setLoadingSynonyms(false);
+  };
+
+  const isWordEligibleForSynonyms = (word) => {
+    if (!enableSynonyms) return false;
+    
+    const cleanWord = word.replace(/[.,!?;:"()]/g, '').toLowerCase();
+    // Only process words that are at least 3 characters and are likely content words
+    return cleanWord.length >= 3 && 
+           !/^(the|and|or|but|in|on|at|to|for|of|with|by|from|a|an|is|are|was|were|be|been|have|has|had|do|does|did|will|would|could|should|may|might|can|this|that|these|those|i|you|he|she|it|we|they|me|him|her|us|them|my|your|his|her|its|our|their)$/.test(cleanWord);
+  };
+
+  const renderTextWithSynonyms = (text) => {
+    // Split text into sentences
+    const sentences = text.split(/([.!?]+)/);
+    
+    return sentences.map((sentence, sentenceIndex) => {
+      if (!sentence.trim() || /^[.!?]+$/.test(sentence)) {
+        return <span key={sentenceIndex}>{sentence}</span>;
+      }
+      
+      const words = sentence.split(/(\s+)/);
+      let synonymWordFound = false;
+      
+      // First pass: check eligible words
+      const eligibleWords = words.map((word, index) => {
+        const cleanWord = word.replace(/[.,!?;:"()]/g, '').toLowerCase();
+        return isWordEligibleForSynonyms(word) ? { word: cleanWord, index } : null;
+      }).filter(Boolean);
+      
+      // Pick one random eligible word per sentence
+      const selectedWord = eligibleWords.length > 0 
+        ? eligibleWords[Math.floor(Math.random() * eligibleWords.length)]
+        : null;
+      
+      return (
+        <span key={sentenceIndex}>
+          {words.map((word, index) => {
+            const cleanWord = word.replace(/[.,!?;:"()]/g, '').toLowerCase();
+            
+            if (selectedWord && index === selectedWord.index && word.trim() && !synonymWordFound) {
+              synonymWordFound = true;
+              return (
+                <span key={index} className="synonym-wrapper">
+                  <span
+                    className="synonym-word"
+                    onMouseEnter={(e) => handleWordHover(e, cleanWord)}
+                    onMouseLeave={handleWordLeave}
+                  >
+                    {word}
+                  </span>
+                </span>
+              );
+            }
+            
+            return <span key={index}>{word}</span>;
+          })}
+        </span>
+      );
+    });
+  };
+
+  return (
+    <div className={`entry-content ${colorClass}`}>
+      {text.split('\n').map((line, lineIndex) => (
+        <div key={lineIndex} className={lineIndex > 0 ? 'line-spacing' : ''}>
+          {renderTextWithSynonyms(line)}
+        </div>
+      ))}
+      
+      {/* Synonym tooltip */}
+      {hoveredWord && enableSynonyms && (
+        <div 
+          className="synonym-tooltip"
+          style={{
+            position: 'absolute',
+            left: tooltipPosition.x,
+            top: tooltipPosition.y,
+            transform: 'translateX(-50%)',
+            zIndex: 1000
+          }}
+        >
+          <div className="synonym-tooltip-content">
+            {loadingSynonyms ? (
+              <div className="synonym-loading">Loading...</div>
+            ) : (
+              <>
+                <div className="synonym-tooltip-title">Try: </div>
+                <div className="synonym-list">
+                  {synonyms.length > 0 ? (
+                    synonyms.map((synonym, index) => (
+                      <span key={index} className="synonym-item">
+                        {synonym}
+                        {index < synonyms.length - 1 ? ' • ' : ''}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="synonym-item">No suggestions</span>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const NotebookComponent = ({
   title,
@@ -68,21 +232,17 @@ const NotebookComponent = ({
                 minute: '2-digit'
               })}
             </div>
-            <div
-              className={`entry-content ${
+            <SynonymText 
+              text={entry.text}
+              enableSynonyms={showInput} // Only enable synonyms for the input notebook (left side)
+              colorClass={
                 alternateColors
                   ? entry.colorIndex % 2 === 0 ? 'yellow-entry' : 'blue-entry'
                   : entry.colorIndex !== undefined
                     ? entry.colorIndex % 2 === 0 ? 'yellow-entry' : 'blue-entry'
                     : 'default-entry'
-              }`}
-            >
-              {entry.text.split('\n').map((line, lineIndex) => (
-                <div key={lineIndex} className={lineIndex > 0 ? 'line-spacing' : ''}>
-                  {line}
-                </div>
-              ))}
-            </div>
+              }
+            />
           </div>
         ))}
 
