@@ -19,7 +19,7 @@ const NotebookComponent = ({
     <div ref={notebookRef} className="notebook">
       {/* Notebook Header */}
       <div className="notebook-header">
-        <div className="notebook-header-text">Notebook Entry</div>
+        <div className="notebook-header-text">{title}</div>
       </div>
 
       {/* Input Section - Only for left notebook */}
