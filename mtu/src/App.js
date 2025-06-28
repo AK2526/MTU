@@ -1,6 +1,96 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 
+const NotebookComponent = ({ 
+  title, 
+  entries, 
+  notebookRef, 
+  showInput = false, 
+  alternateColors = false,
+  currentInput,
+  setCurrentInput,
+  handleKeyDown,
+  handleSubmit,
+  inputRef
+}) => (
+  <div className="notebook-container">
+    <h1 className="notebook-title">{title}</h1>
+    
+    <div ref={notebookRef} className="notebook">
+      {/* Notebook Header */}
+      <div className="notebook-header">
+        <div className="notebook-header-text">Notebook Entry</div>
+      </div>
+
+      {/* Input Section - Only for left notebook */}
+      {showInput && (
+        <div className="input-section">
+          <div className="input-container">
+            <input
+              ref={inputRef}
+              type="text"
+              value={currentInput}
+              onChange={(e) => setCurrentInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Write your thoughts here... (Press Enter to add entry)"
+              className="text-input"
+            />
+            <button
+              onClick={handleSubmit}
+              disabled={!currentInput.trim()}
+              className="add-button"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Entries Container */}
+      <div className="entries-container">
+        {entries.length === 0 && (
+          <div className="empty-message">
+            {showInput 
+              ? "Start writing your first entry above..." 
+              : "Waiting for responses..."}
+          </div>
+        )}
+        
+        {entries.map((entry, index) => (
+          <div key={entry.id} className="entry fade-in">
+            <div className="entry-timestamp">
+              {entry.timestamp.toLocaleTimeString([], { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              })}
+            </div>
+            <div 
+              className={`entry-content ${
+                alternateColors
+                  ? entry.colorIndex % 2 === 0 ? 'yellow-entry' : 'blue-entry'
+                  : entry.colorIndex !== undefined
+                    ? entry.colorIndex % 2 === 0 ? 'yellow-entry' : 'blue-entry'
+                    : 'default-entry'
+              }`}
+            >
+              {entry.text.split('\n').map((line, lineIndex) => (
+                <div key={lineIndex} className={lineIndex > 0 ? 'line-spacing' : ''}>
+                  {line}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Notebook Stats */}
+    <div className="notebook-stats">
+      {entries.length} {entries.length === 1 ? 'entry' : 'entries'} written
+    </div>
+  </div>
+);
+
 const App = () => {
   const [leftEntries, setLeftEntries] = useState([]);
   const [rightEntries, setRightEntries] = useState([]);
@@ -74,104 +164,12 @@ const App = () => {
     }
   }, [rightEntries]);
 
-  // Focus input on component mount and keep it focused
+  // Focus input on component mount
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
   }, []);
-
-  // Maintain focus after state updates
-  useEffect(() => {
-    if (inputRef.current && document.activeElement !== inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [leftEntries, rightEntries]);
-
-  const NotebookComponent = ({ 
-    title, 
-    entries, 
-    notebookRef, 
-    showInput = false, 
-    alternateColors = false 
-  }) => (
-    <div className="notebook-container">
-      <h1 className="notebook-title">{title}</h1>
-      
-      <div ref={notebookRef} className="notebook">
-        {/* Notebook Header */}
-        <div className="notebook-header">
-          <div className="notebook-header-text">Notebook Entry</div>
-        </div>
-
-        {/* Input Section - Only for left notebook */}
-        {showInput && (
-          <div className="input-section">
-            <div className="input-container">
-              <input
-                ref={inputRef}
-                type="text"
-                value={currentInput}
-                onChange={(e) => setCurrentInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Write your thoughts here... (Press Enter to add entry)"
-                className="text-input"
-              />
-              <button
-                onClick={handleSubmit}
-                disabled={!currentInput.trim()}
-                className="add-button"
-              >
-                Add
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Entries Container */}
-        <div className="entries-container">
-          {entries.length === 0 && (
-            <div className="empty-message">
-              {showInput 
-                ? "Start writing your first entry above..." 
-                : "Waiting for responses..."}
-            </div>
-          )}
-          
-          {entries.map((entry, index) => (
-            <div key={entry.id} className="entry fade-in">
-              <div className="entry-timestamp">
-                {entry.timestamp.toLocaleTimeString([], { 
-                  hour: '2-digit', 
-                  minute: '2-digit' 
-                })}
-              </div>
-              <div 
-                className={`entry-content ${
-                  alternateColors
-                    ? entry.colorIndex % 2 === 0 ? 'yellow-entry' : 'blue-entry'
-                    : entry.colorIndex !== undefined
-                      ? entry.colorIndex % 2 === 0 ? 'yellow-entry' : 'blue-entry'
-                      : 'default-entry'
-                }`}
-              >
-                {entry.text.split('\n').map((line, lineIndex) => (
-                  <div key={lineIndex} className={lineIndex > 0 ? 'line-spacing' : ''}>
-                    {line}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Notebook Stats */}
-      <div className="notebook-stats">
-        {entries.length} {entries.length === 1 ? 'entry' : 'entries'} written
-      </div>
-    </div>
-  );
 
   return (
     <div className="app">
@@ -182,6 +180,11 @@ const App = () => {
           notebookRef={leftNotebookRef}
           showInput={true}
           alternateColors={true}
+          currentInput={currentInput}
+          setCurrentInput={setCurrentInput}
+          handleKeyDown={handleKeyDown}
+          handleSubmit={handleSubmit}
+          inputRef={inputRef}
         />
         
         <NotebookComponent
