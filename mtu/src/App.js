@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
+import CustomAIService from './Backend/custom';
 
 const NotebookComponent = ({
   title,
@@ -12,7 +13,8 @@ const NotebookComponent = ({
   setCurrentInput,
   handleKeyDown,
   handleSubmit,
-  inputRef
+  inputRef,
+  isLoading = false
 }) => (
   <div className="notebook-container">
     <h1 className="notebook-title">{title}</h1>
@@ -33,15 +35,16 @@ const NotebookComponent = ({
               value={currentInput}
               onChange={(e) => setCurrentInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Write your thoughts here... (Press Enter to add entry)"
+              placeholder={isLoading ? "AI is thinking..." : "Write your thoughts here... (Press Enter to add entry)"}
               className="text-input"
+              disabled={isLoading}
             />
             <button
               onClick={handleSubmit}
-              disabled={!currentInput.trim()}
+              disabled={!currentInput.trim() || isLoading}
               className="add-button"
             >
-              Add
+              {isLoading ? "..." : "Add"}
             </button>
           </div>
         </div>
@@ -49,7 +52,7 @@ const NotebookComponent = ({
 
       {/* Entries Container */}
       <div className="entries-container">
-        {entries.length === 0 && (
+        {entries.length === 0 && !isLoading && (
           <div className="empty-message">
             {showInput
               ? "Start writing your first entry above..."
@@ -82,6 +85,29 @@ const NotebookComponent = ({
             </div>
           </div>
         ))}
+
+        {/* Loading indicator for AI responses */}
+        {isLoading && !showInput && (
+          <div className="entry fade-in loading-entry">
+            <div className="entry-timestamp">
+              {new Date().toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit'
+              })}
+            </div>
+            <div className="entry-content loading-content">
+              <div className="ai-thinking">
+                <span>🤔</span>
+                <span>AI Buddy is thinking...</span>
+                <div className="thinking-dots">
+                  <span>.</span>
+                  <span>.</span>
+                  <span>.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
 
@@ -96,51 +122,56 @@ const App = () => {
   const [leftEntries, setLeftEntries] = useState([]);
   const [rightEntries, setRightEntries] = useState([]);
   const [currentInput, setCurrentInput] = useState('');
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
   const leftNotebookRef = useRef(null);
   const rightNotebookRef = useRef(null);
   const inputRef = useRef(null);
 
-  const handleSubmit = () => {
-    if (currentInput.trim()) {
+  const handleSubmit = async () => {
+    if (currentInput.trim() && !isLoading) {
+      const userMessage = currentInput.trim();
       const newLeftEntry = {
         id: Date.now(),
-        text: currentInput.trim(),
+        text: userMessage,
         timestamp: new Date(),
         colorIndex: leftEntries.length
       };
       setLeftEntries(prev => [...prev, newLeftEntry]);
+      setCurrentInput('');
+      setIsLoading(true);
 
-      // Backend simulation - automatically add entry to right notebook
-      // This simulates a backend process that responds to user input
-      // In a real app, this would be an API call or server-side logic
-      setTimeout(() => {
-        const responseTexts = [
-          "Processing your input...",
-          "That's an interesting thought!",
-          "I understand what you mean.",
-          "Thanks for sharing that.",
-          "Let me think about this.",
-          "Good point to consider.",
-          "I see your perspective.",
-          "That makes sense.",
-          "Noted for future reference.",
-          "Interesting observation."
-        ];
-
-        const randomResponse = responseTexts[Math.floor(Math.random() * responseTexts.length)];
+      try {
+        // Use the AI chat function to get a response
+        const aiResult = await CustomAIService.chatWithChild(conversationHistory, userMessage);
+        
+        // Update conversation history
+        setConversationHistory(aiResult.updatedHistory);
+        
+        // Add AI response to right notebook
         const newRightEntry = {
           id: Date.now() + 1,
-          text: randomResponse,
+          text: aiResult.response,
           timestamp: new Date(),
           colorIndex: newLeftEntry.colorIndex
         };
         setRightEntries(prev => [...prev, newRightEntry]);
-      }, 500);
-
-      setCurrentInput('');
-      // Ensure input stays focused after submitting
-      if (inputRef.current) {
-        inputRef.current.focus();
+      } catch (error) {
+        console.error('Error getting AI response:', error);
+        // Fallback response in case of error
+        const errorEntry = {
+          id: Date.now() + 1,
+          text: "Sorry, I'm having trouble thinking right now. Can you try asking me something else?",
+          timestamp: new Date(),
+          colorIndex: newLeftEntry.colorIndex
+        };
+        setRightEntries(prev => [...prev, errorEntry]);
+      } finally {
+        setIsLoading(false);
+        // Ensure input stays focused after submitting
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
       }
     }
   };
@@ -186,6 +217,7 @@ const App = () => {
           handleKeyDown={handleKeyDown}
           handleSubmit={handleSubmit}
           inputRef={inputRef}
+          isLoading={isLoading}
         />
 
         <NotebookComponent
@@ -194,6 +226,7 @@ const App = () => {
           notebookRef={rightNotebookRef}
           showInput={false}
           alternateColors={false}
+          isLoading={isLoading}
         />
       </div>
     </div>
