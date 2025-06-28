@@ -176,7 +176,7 @@ const App = () => {
     <div className="app">
       <div className="notebooks-container">
         <NotebookComponent
-          title="My Notebook"
+          title="My Journal"
           entries={leftEntries}
           notebookRef={leftNotebookRef}
           showInput={true}
@@ -189,7 +189,7 @@ const App = () => {
         />
 
         <NotebookComponent
-          title="Response Log"
+          title="AI Buddy"
           entries={rightEntries}
           notebookRef={rightNotebookRef}
           showInput={false}
