@@ -2,31 +2,30 @@ import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 import CustomAIService from './Backend/custom';
 
-// Cache for storing Gemini-generated synonyms
+// Cache for storing sentence-level synonyms
 const SYNONYMS_CACHE = new Map();
 
-// Function to get synonyms from Gemini API
-const getSynonymsFromGemini = async (word) => {
+// Simplified function to get synonyms for a sentence
+const getSynonymsForSentence = async (sentence) => {
+  const cacheKey = sentence.toLowerCase().trim();
+  
   // Check cache first
-  if (SYNONYMS_CACHE.has(word.toLowerCase())) {
-    return SYNONYMS_CACHE.get(word.toLowerCase());
+  if (SYNONYMS_CACHE.has(cacheKey)) {
+    return SYNONYMS_CACHE.get(cacheKey);
   }
 
   try {
-    const response = await CustomAIService.getVocabularySuggestions(word, ""); // Empty context for standalone word lookup
+    const synonymsObject = await CustomAIService.getSynonymsForSentence(sentence);
     
-    // // Parse the response to extract synonyms
-    // const synonymsText = response.response.trim();
-    // const synonyms = synonymsText.split(',').map(s => s.trim()).slice(0, 3);
-    
-    // // Cache the result
-    // SYNONYMS_CACHE.set(word.toLowerCase(), synonyms);
-    
-    return response; // Return the full response for now, can be adjusted later if needed
+    // Cache valid results
+    if (synonymsObject && typeof synonymsObject === 'object' && Object.keys(synonymsObject).length > 0) {
+      SYNONYMS_CACHE.set(cacheKey, synonymsObject);
+      return synonymsObject;
+    }
+    return {};
   } catch (error) {
-    console.error('Error getting synonyms from Gemini:', error);
-    // Return empty array if API fails
-    return [];
+    console.error('Error getting synonyms:', error);
+    return {};
   }
 };
 
@@ -35,39 +34,80 @@ const SynonymText = ({ text, colorClass, enableSynonyms = false }) => {
   const [hoveredWord, setHoveredWord] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [synonyms, setSynonyms] = useState([]);
-  const [loadingSynonyms, setLoadingSynonyms] = useState(false);
+  const [sentenceSynonyms, setSentenceSynonyms] = useState({});
+  const isLoadingRef = useRef(false);
 
-  const handleWordHover = async (e, word) => {
+  // Load synonyms when component mounts or text changes
+  useEffect(() => {
+    if (enableSynonyms && text && text.trim() && !isLoadingRef.current) {
+      const cacheKey = text.toLowerCase().trim();
+      
+      if (SYNONYMS_CACHE.has(cacheKey)) {
+        setSentenceSynonyms(SYNONYMS_CACHE.get(cacheKey));
+      } else {
+        loadSentenceSynonyms();
+      }
+    }
+  }, [text, enableSynonyms]);
+
+  const loadSentenceSynonyms = async () => {
+    if (!text?.trim() || isLoadingRef.current) return;
+    
+    isLoadingRef.current = true;
+    
+    try {
+      const synonymsData = await getSynonymsForSentence(text);
+      if (synonymsData && Object.keys(synonymsData).length > 0) {
+        setSentenceSynonyms(synonymsData);
+      }
+    } catch (error) {
+      console.error('Error loading synonyms:', error);
+    } finally {
+      isLoadingRef.current = false;
+    }
+  };
+
+  const handleWordHover = (e, word) => {
     if (!enableSynonyms) return;
     
-    setLoadingSynonyms(true);
-    setHoveredWord(word.toLowerCase());
+    const cleanWord = word.toLowerCase().replace(/[.,!?;:"()]/g, '');
     
-    const rect = e.target.getBoundingClientRect();
-    const parentRect = e.target.closest('.entry-content').getBoundingClientRect();
-    setTooltipPosition({
-      x: rect.left + rect.width / 2 - parentRect.left,
-      y: rect.top - parentRect.top - 5
-    });
-
-    const wordSynonyms = await getSynonymsFromGemini(word);
-    setSynonyms(wordSynonyms);
-    setLoadingSynonyms(false);
+    if (sentenceSynonyms[cleanWord]) {
+      const wordSynonyms = sentenceSynonyms[cleanWord];
+      setHoveredWord(cleanWord);
+      setSynonyms(wordSynonyms);
+      
+      const rect = e.target.getBoundingClientRect();
+      const parentRect = e.target.closest('.entry-content').getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      
+      // Calculate initial position
+      let x = rect.left + rect.width / 2 - parentRect.left;
+      const y = rect.top - parentRect.top - 10; // Further reduced offset from -12 to -10
+      
+      // Estimate tooltip width using the actual synonyms for this word
+      const synonymText = wordSynonyms.join(' • ');
+      const tooltipEstimatedWidth = Math.max(140, synonymText.length * 6.5 + 70); // Further reduced
+      
+      // Adjust x position to prevent going off-screen
+      const tooltipLeftEdge = rect.left - tooltipEstimatedWidth / 2;
+      const tooltipRightEdge = rect.left + tooltipEstimatedWidth / 2;
+      
+      if (tooltipLeftEdge < 10) {
+        // Too far left, align to left edge with padding
+        x = 10 - parentRect.left + tooltipEstimatedWidth / 2;
+      } else if (tooltipRightEdge > viewportWidth - 10) {
+        // Too far right, align to right edge with padding
+        x = (viewportWidth - 10) - parentRect.left - tooltipEstimatedWidth / 2;
+      }
+      
+      setTooltipPosition({ x, y });
+    }
   };
 
   const handleWordLeave = () => {
     setHoveredWord(null);
     setSynonyms([]);
-    setLoadingSynonyms(false);
-  };
-
-  const isWordEligibleForSynonyms = (word) => {
-    if (!enableSynonyms) return false;
-    
-    const cleanWord = word.replace(/[.,!?;:"()]/g, '').toLowerCase();
-    // Only process words that are at least 3 characters and are likely content words
-    return cleanWord.length >= 3 && 
-           !/^(the|and|or|but|in|on|at|to|for|of|with|by|from|a|an|is|are|was|were|be|been|have|has|had|do|does|did|will|would|could|should|may|might|can|this|that|these|those|i|you|he|she|it|we|they|me|him|her|us|them|my|your|his|her|its|our|their)$/.test(cleanWord);
   };
 
   const renderTextWithSynonyms = (text) => {
@@ -80,31 +120,19 @@ const SynonymText = ({ text, colorClass, enableSynonyms = false }) => {
       }
       
       const words = sentence.split(/(\s+)/);
-      let synonymWordFound = false;
-      
-      // First pass: check eligible words
-      const eligibleWords = words.map((word, index) => {
-        const cleanWord = word.replace(/[.,!?;:"()]/g, '').toLowerCase();
-        return isWordEligibleForSynonyms(word) ? { word: cleanWord, index } : null;
-      }).filter(Boolean);
-      
-      // Pick one random eligible word per sentence
-      const selectedWord = eligibleWords.length > 0 
-        ? eligibleWords[Math.floor(Math.random() * eligibleWords.length)]
-        : null;
       
       return (
         <span key={sentenceIndex}>
           {words.map((word, index) => {
             const cleanWord = word.replace(/[.,!?;:"()]/g, '').toLowerCase();
             
-            if (selectedWord && index === selectedWord.index && word.trim() && !synonymWordFound) {
-              synonymWordFound = true;
+            // Check if this word has synonyms available
+            if (enableSynonyms && sentenceSynonyms[cleanWord] && word.trim()) {
               return (
                 <span key={index} className="synonym-wrapper">
                   <span
                     className="synonym-word"
-                    onMouseEnter={(e) => handleWordHover(e, cleanWord)}
+                    onMouseEnter={(e) => handleWordHover(e, word)}
                     onMouseLeave={handleWordLeave}
                   >
                     {word}
@@ -137,29 +165,30 @@ const SynonymText = ({ text, colorClass, enableSynonyms = false }) => {
             left: tooltipPosition.x,
             top: tooltipPosition.y,
             transform: 'translateX(-50%)',
-            zIndex: 1000
+            zIndex: 1000,
+            padding: '4px 8px',
+            backgroundColor: '#333',
+            color: 'white',
+            borderRadius: '4px',
+            fontSize: '11px',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+            whiteSpace: 'nowrap'
           }}
         >
-          <div className="synonym-tooltip-content">
-            {loadingSynonyms ? (
-              <div className="synonym-loading">Loading...</div>
-            ) : (
-              <>
-                <div className="synonym-tooltip-title">Try: </div>
-                <div className="synonym-list">
-                  {synonyms.length > 0 ? (
-                    synonyms.map((synonym, index) => (
-                      <span key={index} className="synonym-item">
-                        {synonym}
-                        {index < synonyms.length - 1 ? ' • ' : ''}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="synonym-item">No suggestions</span>
-                  )}
-                </div>
-              </>
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span style={{ fontWeight: 'bold', color: '#ffd700' }}>Try:</span>
+            <span>
+              {synonyms.length > 0 ? (
+                synonyms.map((synonym, index) => (
+                  <span key={index}>
+                    {synonym}
+                    {index < synonyms.length - 1 ? ' • ' : ''}
+                  </span>
+                ))
+              ) : (
+                'No suggestions'
+              )}
+            </span>
           </div>
         </div>
       )}

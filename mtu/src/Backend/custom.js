@@ -135,12 +135,78 @@ Keep it short and engaging - no more than 2-3 sentences.
   }
 };
 
+/**
+ * Analyzes a sentence and returns synonyms for simpler words that could be enhanced
+ * @param {string} sentence - The sentence to analyze
+ * @returns {Promise<Object>} - JSON object with simple words as keys and arrays of 3 synonyms as values
+ */
+export const getSynonymsForSentence = async (sentence) => {
+  try {
+    // Streamlined prompt for faster processing
+    const prompt = `Analyze this sentence for vocabulary enhancement: "${sentence}"
+
+Identify 2-4 basic words that children aged 8-12 could improve. Target these specific types:
+
+1. INTENSIFIERS: very, really, so, quite, pretty, super
+2. BASIC EMOTIONS: sad, happy, mad, scared, excited, worried
+3. SIMPLE ACTION VERBS: go, run, walk, said, get, put, take, make, eat, play, work
+4. BASIC ADJECTIVES: good, bad, big, small, nice, cool, fun, awesome
+5. FEELING VERBS: feel, think, want, like, love, hate
+6. MOVEMENT VERBS: going, walking, running, moving, coming
+7. OVERUSED WORDS: thing, stuff, great, amazing, awesome
+
+DO NOT include: 
+- Helper/linking verbs (am, is, are, was, were, be, been, have, has, had, do, does, did, will, would, could, should, can, may, might)
+- Articles (a, an, the)
+- Prepositions (in, on, at, to, for, with, by, from, of, about)
+- Pronouns (I, you, he, she, it, we, they, me, him, her, us, them, my, your, his, her, its, our, their)
+- Conjunctions (and, but, or, so, because, if, when, while)
+- Question words (how, what, where, when, why, who)
+- Already advanced vocabulary
+
+Return valid JSON with exactly 3 age-appropriate synonyms per identified word:
+{"very":["extremely","incredibly","remarkably"],"love":["adore","cherish","treasure"],"sad":["unhappy","gloomy","downhearted"]}
+
+If no basic words found, return: {}`;
+
+    const response = await AIService.generateText(prompt);
+    console.log('🔍 Debug - AI response for "' + sentence + '":', response);
+    
+    // More robust JSON extraction and parsing
+    const jsonMatch = response.match(/\{[\s\S]*?\}/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        // Ensure we got a valid object with at least one property
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          return parsed;
+        }
+      } catch {
+        // If parsing fails, try to find multiple objects or clean the string
+        const cleanJson = response.replace(/[\n\r\t]/g, '').match(/\{[^{}]*\}/);
+        if (cleanJson) {
+          try {
+            return JSON.parse(cleanJson[0]);
+          } catch {
+            return {};
+          }
+        }
+      }
+    }
+    return {};
+    
+  } catch (error) {
+    return {};
+  }
+};
+
 // Export all functions as default object
 const CustomAIService = {
   enhanceVocabulary,
   chatWithChild,
   getVocabularySuggestions,
-  explainWord
+  explainWord,
+  getSynonymsForSentence
 };
 
 export default CustomAIService;
