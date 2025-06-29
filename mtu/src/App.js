@@ -258,10 +258,17 @@ const NotebookComponent = ({
         {entries.map((entry, index) => (
           <div key={entry.id} className="entry fade-in">
             <div className="entry-timestamp">
-              {entry.timestamp.toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
+              {(() => {
+                try {
+                  const timestamp = entry.timestamp instanceof Date ? entry.timestamp : new Date(entry.timestamp);
+                  if (isNaN(timestamp.getTime())) {
+                    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  }
+                  return timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                } catch (error) {
+                  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+              })()}
             </div>
             <SynonymText 
               text={entry.text}
@@ -331,6 +338,12 @@ const App = () => {
   const saveCurrentSessionWithRetry = async (retryCount = 0, maxRetries = 2, generateSmartTitle = false) => {
     if (!currentSessionId) {
       console.log("No session ID to save to - no entries have been created yet");
+      return;
+    }
+
+    // Prevent saving sessions with no entries
+    if (leftEntries.length === 0 && rightEntries.length === 0) {
+      console.log("⚠️ Cannot save session with 0 entries - skipping save");
       return;
     }
 
@@ -405,8 +418,14 @@ Title:`;
 
       const sessionData = {
         title: await generateTitle(),
-        leftEntries: leftEntries,
-        rightEntries: rightEntries,
+        leftEntries: leftEntries.map(entry => ({
+          ...entry,
+          timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : entry.timestamp
+        })),
+        rightEntries: rightEntries.map(entry => ({
+          ...entry,
+          timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : entry.timestamp
+        })),
         conversationHistory: conversationHistory,
         vocabularyData: vocabularyData, // Include all cached vocabulary
         lastUpdated: new Date().toISOString()
@@ -450,8 +469,8 @@ Title:`;
       
       // First, save current session if it has content
       if (leftEntries.length > 0 || rightEntries.length > 0) {
-        console.log("💾 Saving current session before switching...");
-        await saveCurrentSessionWithRetry(0, 2, false); // Don't generate smart title for auto-save
+        console.log("💾 Saving current session before switching with AI title generation...");
+        await saveCurrentSessionWithRetry(0, 2, true); // Generate smart title when switching sessions
       }
 
       // Load the selected session
@@ -460,16 +479,42 @@ Title:`;
 
       if (sessionData) {
         // Update all state with loaded data
-        // Convert timestamps back to Date objects for entries
-        const leftEntriesWithDates = (sessionData.leftEntries || []).map(entry => ({
-          ...entry,
-          timestamp: entry.timestamp ? new Date(entry.timestamp) : new Date()
-        }));
+        // Convert timestamps back to Date objects for entries with better error handling
+        const leftEntriesWithDates = (sessionData.leftEntries || []).map(entry => {
+          let timestamp = new Date();
+          try {
+            if (entry.timestamp) {
+              const parsedDate = new Date(entry.timestamp);
+              if (!isNaN(parsedDate.getTime())) {
+                timestamp = parsedDate;
+              }
+            }
+          } catch (error) {
+            console.warn("Invalid timestamp for entry:", entry.timestamp);
+          }
+          return {
+            ...entry,
+            timestamp
+          };
+        });
         
-        const rightEntriesWithDates = (sessionData.rightEntries || []).map(entry => ({
-          ...entry,
-          timestamp: entry.timestamp ? new Date(entry.timestamp) : new Date()
-        }));
+        const rightEntriesWithDates = (sessionData.rightEntries || []).map(entry => {
+          let timestamp = new Date();
+          try {
+            if (entry.timestamp) {
+              const parsedDate = new Date(entry.timestamp);
+              if (!isNaN(parsedDate.getTime())) {
+                timestamp = parsedDate;
+              }
+            }
+          } catch (error) {
+            console.warn("Invalid timestamp for entry:", entry.timestamp);
+          }
+          return {
+            ...entry,
+            timestamp
+          };
+        });
 
         setLeftEntries(leftEntriesWithDates);
         setRightEntries(rightEntriesWithDates);
@@ -493,6 +538,36 @@ Title:`;
     } catch (error) {
       console.error("Error loading session:", error);
       alert("Failed to load session. Please try again.");
+    }
+  };
+
+  // Delete a specific notebook
+  const deleteNotebook = async (notebookId, notebookTitle) => {
+    const confirmDelete = window.confirm(`Are you sure you want to delete "${notebookTitle}"? This action cannot be undone.`);
+    
+    if (confirmDelete) {
+      try {
+        console.log("🗑️ Deleting notebook:", notebookId);
+        await DatabaseService.deleteNotebook(notebookId);
+        
+        // If we're deleting the current session, clear the current state
+        if (notebookId === currentSessionId) {
+          setLeftEntries([]);
+          setRightEntries([]);
+          setConversationHistory([]);
+          setCurrentSessionId(null);
+          SYNONYMS_CACHE.clear();
+        }
+        
+        // Refresh the notebooks list
+        const updatedNotebooks = await DatabaseService.getAllNotebooks();
+        setAvailableNotebooks(updatedNotebooks);
+        
+        console.log("✅ Notebook deleted successfully");
+      } catch (error) {
+        console.error("Error deleting notebook:", error);
+        alert("Failed to delete notebook. Please try again.");
+      }
     }
   };
 
@@ -522,6 +597,38 @@ Title:`;
       console.error("Error creating new session:", error);
       sessionCreatedRef.current = false; // Reset on error
       return null;
+    }
+  };
+
+  // Create a new session manually (for the "New Session" button)
+  const createNewSessionManually = async () => {
+    try {
+      // First, save current session if it has content
+      if (leftEntries.length > 0 || rightEntries.length > 0) {
+        console.log("💾 Saving current session before creating new one with AI title generation...");
+        await saveCurrentSessionWithRetry(0, 2, true); // Generate smart title when creating new session
+        console.log("✅ Current session saved, now creating new session...");
+      }
+
+      // Clear current state
+      setLeftEntries([]);
+      setRightEntries([]);
+      setConversationHistory([]);
+      setCurrentSessionId(null);
+      SYNONYMS_CACHE.clear();
+      
+      // Reset session creation ref to allow new session creation
+      sessionCreatedRef.current = false;
+      
+      console.log("🆕 New session ready - will be created on first entry");
+      
+      // Focus the input for immediate use
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    } catch (error) {
+      console.error("Error creating new session:", error);
+      alert("Failed to create new session. Please try again.");
     }
   };
 
@@ -661,6 +768,34 @@ Title:`;
           }}
         >
           📚 My Journals
+        </button>
+        <button
+          onClick={createNewSessionManually}
+          style={{
+            background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
+            color: 'white',
+            border: 'none',
+            padding: '12px 20px',
+            borderRadius: '25px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+            transition: 'all 0.3s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.transform = 'translateY(-2px)';
+            e.target.style.boxShadow = '0 6px 20px rgba(0,0,0,0.3)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = 'translateY(0)';
+            e.target.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)';
+          }}
+        >
+          ✨ New Session
         </button>
         <button
           onClick={() => saveCurrentSessionWithRetry(0, 2, true)}
@@ -810,46 +945,78 @@ Title:`;
                 {availableNotebooks.map((notebook, index) => (
                   <div
                     key={notebook.id}
-                    onClick={() => loadSession(notebook.id)}
                     style={{
                       padding: '16px',
                       borderRadius: '8px',
                       border: '1px solid #eee',
                       marginBottom: '12px',
-                      cursor: 'pointer',
                       transition: 'all 0.2s ease',
                       backgroundColor: currentSessionId === notebook.id ? '#e3f2fd' : 'white'
                     }}
-                    onMouseEnter={(e) => {
-                      if (currentSessionId !== notebook.id) {
-                        e.target.style.backgroundColor = '#f5f5f5';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (currentSessionId !== notebook.id) {
-                        e.target.style.backgroundColor = 'white';
-                      }
-                    }}
                   >
-                    <div style={{
-                      fontWeight: 'bold',
-                      color: '#333',
-                      marginBottom: '4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}>
-                      {currentSessionId === notebook.id && <span style={{ color: '#2196F3' }}>▶</span>}
-                      {notebook.title || `Notebook ${index + 1}`}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
-                      {notebook.lastUpdated ? 
-                        `Last updated: ${new Date(notebook.lastUpdated).toLocaleDateString()} ${new Date(notebook.lastUpdated).toLocaleTimeString()}` 
-                        : 'No update time'
-                      }
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#888' }}>
-                      {(notebook.leftEntries?.length || 0)} entries • {Object.keys(notebook.vocabularyData || {}).length} vocabulary words
+                    <div 
+                      onClick={() => loadSession(notebook.id)}
+                      style={{
+                        cursor: 'pointer',
+                        flex: 1
+                      }}
+                      onMouseEnter={(e) => {
+                        if (currentSessionId !== notebook.id) {
+                          e.target.closest('div[style*="padding: 16px"]').style.backgroundColor = '#f5f5f5';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (currentSessionId !== notebook.id) {
+                          e.target.closest('div[style*="padding: 16px"]').style.backgroundColor = 'white';
+                        }
+                      }}
+                    >
+                      <div style={{
+                        fontWeight: 'bold',
+                        color: '#333',
+                        marginBottom: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {currentSessionId === notebook.id && <span style={{ color: '#2196F3' }}>▶</span>}
+                          {notebook.title || `Notebook ${index + 1}`}
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteNotebook(notebook.id, notebook.title || `Notebook ${index + 1}`);
+                          }}
+                          style={{
+                            background: 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)',
+                            color: 'white',
+                            border: 'none',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.background = 'linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.background = 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)';
+                          }}
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+                        {notebook.lastUpdated ? 
+                          `Last updated: ${new Date(notebook.lastUpdated).toLocaleDateString()} ${new Date(notebook.lastUpdated).toLocaleTimeString()}` 
+                          : 'No update time'
+                        }
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#888' }}>
+                        {(notebook.leftEntries?.length || 0)} entries • {Object.keys(notebook.vocabularyData || {}).length} vocabulary words
+                      </div>
                     </div>
                   </div>
                 ))}
