@@ -1,5 +1,11 @@
 /* App.css - Notebook styling without Tailwind */
 
+/* Add spinning animation for save button */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .app {
   min-height: 100vh;
   background-color: #fef7e0;

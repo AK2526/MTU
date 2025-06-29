@@ -319,6 +319,8 @@ const App = () => {
   const [showNotebooksList, setShowNotebooksList] = useState(false);
   const [availableNotebooks, setAvailableNotebooks] = useState([]);
   const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveConfirmed, setSaveConfirmed] = useState(false);
   const leftNotebookRef = useRef(null);
   const rightNotebookRef = useRef(null);
   const inputRef = useRef(null);
@@ -331,6 +333,10 @@ const App = () => {
       console.log("No session ID to save to - no entries have been created yet");
       return;
     }
+
+    // Set loading state
+    setIsSaving(true);
+    setSaveConfirmed(false);
 
     // Clear any existing timeout
     if (saveTimeoutRef.current) {
@@ -410,8 +416,14 @@ Title:`;
       console.log("💾 Session saved successfully:", currentSessionId);
       console.log(`📚 Saved ${vocabularyCount} vocabulary entries`);
       console.log(`📝 Title: "${sessionData.title}"`);
+      
+      // Show confirmation
+      setSaveConfirmed(true);
+      setTimeout(() => setSaveConfirmed(false), 2000); // Hide confirmation after 2 seconds
     } catch (error) {
       console.error("Error saving session:", error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -652,31 +664,58 @@ Title:`;
         </button>
         <button
           onClick={() => saveCurrentSessionWithRetry(0, 2, true)}
+          disabled={isSaving}
           style={{
-            background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
+            background: saveConfirmed 
+              ? 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)' 
+              : isSaving 
+                ? 'linear-gradient(135deg, #9E9E9E 0%, #757575 100%)'
+                : 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
             color: 'white',
             border: 'none',
             padding: '12px 20px',
             borderRadius: '25px',
-            cursor: 'pointer',
+            cursor: isSaving ? 'not-allowed' : 'pointer',
             fontSize: '14px',
             fontWeight: 'bold',
             boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
             transition: 'all 0.3s ease',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px'
+            gap: '8px',
+            opacity: isSaving ? 0.7 : 1
           }}
           onMouseEnter={(e) => {
-            e.target.style.transform = 'translateY(-2px)';
-            e.target.style.boxShadow = '0 6px 20px rgba(0,0,0,0.3)';
+            if (!isSaving) {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 6px 20px rgba(0,0,0,0.3)';
+            }
           }}
           onMouseLeave={(e) => {
-            e.target.style.transform = 'translateY(0)';
-            e.target.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)';
+            if (!isSaving) {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)';
+            }
           }}
         >
-          💾 Save Session
+          {isSaving ? (
+            <>
+              <span style={{ 
+                display: 'inline-block', 
+                animation: 'spin 1s linear infinite',
+                fontSize: '12px'
+              }}>⟳</span>
+              Saving...
+            </>
+          ) : saveConfirmed ? (
+            <>
+              ✅ Saved!
+            </>
+          ) : (
+            <>
+              💾 Save Session
+            </>
+          )}
         </button>
       </div>
 
