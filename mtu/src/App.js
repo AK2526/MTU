@@ -660,7 +660,7 @@ Title:`;
             e.target.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)';
           }}
         >
-          📚 My Journal
+          📚 My Journals
         </button>
         <button
           onClick={() => saveCurrentSessionWithRetry(0, 2, true)}
