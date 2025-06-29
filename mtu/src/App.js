@@ -31,6 +31,27 @@ const getSynonymsForSentence = async (sentence) => {
   }
 };
 
+// Function to get AI-improved sentence for children
+const getImprovedSentence = async (originalSentence) => {
+  try {
+    const improvementPrompt = `You are helping children aged 8-12 improve their writing. Take this sentence and make it better by:
+1. Using more descriptive words
+2. Making it more engaging
+3. Improving grammar if needed
+4. Keeping it age-appropriate and not too complex
+
+Original sentence: "${originalSentence}"
+
+Return ONLY the improved sentence, no explanation or extra text.`;
+
+    const improvedSentence = await AIService.generateText(improvementPrompt);
+    return improvedSentence?.trim() || originalSentence;
+  } catch (error) {
+    console.error('Error getting improved sentence:', error);
+    return originalSentence;
+  }
+};
+
 // Component to render text with synonym tooltips (only for user entries)
 const SynonymText = ({ text, colorClass, enableSynonyms = false }) => {
   const [hoveredWord, setHoveredWord] = useState(null);
@@ -198,6 +219,156 @@ const SynonymText = ({ text, colorClass, enableSynonyms = false }) => {
   );
 };
 
+// Component to show sentence improvement with highlighted changes
+const SentenceImprovement = ({ originalSentence, improvedSentence, isGenerating }) => {
+  // Simple word-level diff to highlight changes
+  const highlightDifferences = (original, improved) => {
+    if (!improved || improved === original) {
+      return <span>{improved}</span>;
+    }
+
+    const originalWords = original.toLowerCase().split(/\s+/);
+    const improvedWords = improved.split(/\s+/);
+    
+    return improvedWords.map((word, index) => {
+      const cleanWord = word.toLowerCase().replace(/[.,!?;:"()]/g, '');
+      const isNewOrChanged = !originalWords.includes(cleanWord);
+      
+      return (
+        <span key={index}>
+          {isNewOrChanged ? (
+            <strong style={{ color: '#16a34a', fontWeight: 'bold' }}>{word}</strong>
+          ) : (
+            word
+          )}
+          {index < improvedWords.length - 1 ? ' ' : ''}
+        </span>
+      );
+    });
+  };
+
+  if (!originalSentence) {
+    return (
+      <div style={{
+        backgroundColor: '#fef7e0',
+        border: '2px solid #fde68a',
+        borderRadius: '12px',
+        padding: '20px',
+        margin: '0 auto',
+        marginTop: '20px',
+        textAlign: 'center',
+        color: '#78350f',
+        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)'
+      }}>
+        <p style={{ margin: 0, fontStyle: 'italic', fontFamily: 'Helvetica, serif' }}>
+          ✨ Write your first sentence above to see corrections!
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      backgroundColor: '#fef7e0',
+      border: '2px solid #fde68a',
+      borderRadius: '12px',
+      padding: '16px',
+      margin: '0 auto',
+      marginTop: '20px',
+      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+      fontFamily: 'Helvetica, serif',
+      backgroundImage: 'repeating-linear-gradient(transparent, transparent 20px, #f3e8b6 20px, #f3e8b6 21px)',
+      backgroundSize: '100% 21px'
+    }}>
+      <h3 style={{ 
+        margin: '0 0 12px 0', 
+        color: '#78350f', 
+        fontSize: '16px',
+        textAlign: 'center',
+        fontFamily: 'Helvetica, serif',
+        fontWeight: 'bold'
+      }}>
+        📝 Sentence Corrector
+      </h3>
+      
+      <div style={{ marginBottom: '12px' }}>
+        <div style={{ 
+          fontSize: '12px', 
+          fontWeight: 'bold', 
+          color: '#78350f', 
+          marginBottom: '6px',
+          fontFamily: 'Helvetica, serif'
+        }}>
+          Your sentence:
+        </div>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '8px',
+          borderRadius: '6px',
+          border: '2px solid #d4a574',
+          fontStyle: 'italic',
+          color: '#78350f',
+          fontFamily: 'Helvetica, serif',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          fontSize: '13px'
+        }}>
+          "{originalSentence}"
+        </div>
+      </div>
+
+      <div>
+        <div style={{ 
+          fontSize: '12px', 
+          fontWeight: 'bold', 
+          color: '#78350f', 
+          marginBottom: '6px',
+          fontFamily: 'Helvetica, serif'
+        }}>
+          AI's corrected version:
+        </div>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '8px',
+          borderRadius: '6px',
+          border: '2px solid #d4a574',
+          minHeight: '32px',
+          display: 'flex',
+          alignItems: 'center',
+          fontFamily: 'Helvetica, serif',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          fontSize: '13px'
+        }}>
+          {isGenerating ? (
+            <div style={{ color: '#a16207', fontStyle: 'italic' }}>
+              🤔 Thinking of corrections...
+            </div>
+          ) : improvedSentence ? (
+            <div style={{ color: '#78350f' }}>
+              "{highlightDifferences(originalSentence, improvedSentence)}"
+            </div>
+          ) : (
+            <div style={{ color: '#a16207', fontStyle: 'italic' }}>
+              Generating correction...
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {improvedSentence && improvedSentence !== originalSentence && !isGenerating && (
+        <div style={{
+          marginTop: '8px',
+          fontSize: '10px',
+          color: '#a16207',
+          textAlign: 'center',
+          fontFamily: 'Helvetica, serif'
+        }}>
+          💡 <strong style={{ color: '#16a34a' }}>Green words</strong> are new or improved!
+        </div>
+      )}
+    </div>
+  );
+};
+
 const NotebookComponent = ({
   title,
   entries,
@@ -328,6 +499,10 @@ const App = () => {
   const [isLoadingNotebooks, setIsLoadingNotebooks] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveConfirmed, setSaveConfirmed] = useState(false);
+  const [lastUserInput, setLastUserInput] = useState('');
+  const [improvedSentence, setImprovedSentence] = useState('');
+  const [isGeneratingImprovement, setIsGeneratingImprovement] = useState(false);
+  const [isLoadingSession, setIsLoadingSession] = useState(false);
   const leftNotebookRef = useRef(null);
   const rightNotebookRef = useRef(null);
   const inputRef = useRef(null);
@@ -464,6 +639,7 @@ Title:`;
 
   // Load a specific session and replace current content
   const loadSession = async (sessionId) => {
+    setIsLoadingSession(true);
     try {
       console.log("🔄 Loading session:", sessionId);
       
@@ -520,6 +696,11 @@ Title:`;
         setRightEntries(rightEntriesWithDates);
         setConversationHistory(sessionData.conversationHistory || []);
         setCurrentSessionId(sessionId);
+        
+        // Clear sentence improvement when loading new session
+        setLastUserInput('');
+        setImprovedSentence('');
+        setIsGeneratingImprovement(false);
 
         // Load vocabulary data back into cache
         if (sessionData.vocabularyData) {
@@ -538,6 +719,8 @@ Title:`;
     } catch (error) {
       console.error("Error loading session:", error);
       alert("Failed to load session. Please try again.");
+    } finally {
+      setIsLoadingSession(false);
     }
   };
 
@@ -617,6 +800,11 @@ Title:`;
       setCurrentSessionId(null);
       SYNONYMS_CACHE.clear();
       
+      // Clear sentence improvement
+      setLastUserInput('');
+      setImprovedSentence('');
+      setIsGeneratingImprovement(false);
+      
       // Reset session creation ref to allow new session creation
       sessionCreatedRef.current = false;
       
@@ -645,6 +833,21 @@ Title:`;
       }
 
       const userMessage = currentInput.trim();
+      
+      // Store the last user input and start generating improvement
+      setLastUserInput(userMessage);
+      setIsGeneratingImprovement(true);
+      
+      // Generate sentence improvement in the background
+      getImprovedSentence(userMessage).then((improved) => {
+        setImprovedSentence(improved);
+        setIsGeneratingImprovement(false);
+      }).catch((error) => {
+        console.error('Error generating sentence improvement:', error);
+        setImprovedSentence('');
+        setIsGeneratingImprovement(false);
+      });
+
       const newLeftEntry = {
         id: Date.now(),
         text: userMessage,
@@ -854,7 +1057,7 @@ Title:`;
         </button>
       </div>
 
-      <div className="notebooks-container" style={{ marginTop: '80px' }}>
+      <div className="notebooks-container" style={{ marginTop: '40px' }}>
         <NotebookComponent
           title="My Journal"
           entries={leftEntries}
@@ -876,6 +1079,15 @@ Title:`;
           showInput={false}
           alternateColors={false}
           isLoading={isLoading}
+        />
+      </div>
+
+      {/* Sentence Improvement Section */}
+      <div style={{ maxWidth: '1024px', margin: '0 auto', padding: '0 16px' }}>
+        <SentenceImprovement 
+          originalSentence={lastUserInput}
+          improvedSentence={improvedSentence}
+          isGenerating={isGeneratingImprovement}
         />
       </div>
 
@@ -901,8 +1113,50 @@ Title:`;
             width: '90%',
             maxHeight: '80vh',
             overflow: 'auto',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
+            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
+            position: 'relative'
           }}>
+            {/* Loading overlay for session switching */}
+            {isLoadingSession && (
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderRadius: '12px',
+                zIndex: 10
+              }}>
+                <div style={{
+                  fontSize: '24px',
+                  marginBottom: '12px',
+                  animation: 'spin 1s linear infinite'
+                }}>
+                  ⟳
+                </div>
+                <div style={{
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  color: '#333',
+                  marginBottom: '4px'
+                }}>
+                  Switching Journal...
+                </div>
+                <div style={{
+                  fontSize: '14px',
+                  color: '#666',
+                  textAlign: 'center'
+                }}>
+                  💾 Saving current session<br />
+                  📖 Loading selected journal
+                </div>
+              </div>
+            )}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -955,10 +1209,11 @@ Title:`;
                     }}
                   >
                     <div 
-                      onClick={() => loadSession(notebook.id)}
+                      onClick={() => !isLoadingSession && loadSession(notebook.id)}
                       style={{
-                        cursor: 'pointer',
-                        flex: 1
+                        cursor: isLoadingSession ? 'not-allowed' : 'pointer',
+                        flex: 1,
+                        opacity: isLoadingSession ? 0.5 : 1
                       }}
                       onMouseEnter={(e) => {
                         if (currentSessionId !== notebook.id) {
