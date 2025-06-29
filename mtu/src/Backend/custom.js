@@ -147,27 +147,28 @@ export const getSynonymsForSentence = async (sentence) => {
 
 Identify 2-4 basic words that children aged 8-12 could improve. Target these specific types:
 
-1. INTENSIFIERS: very, really, so, quite, pretty, super
-2. BASIC EMOTIONS: sad, happy, mad, scared, excited, worried
-3. SIMPLE ACTION VERBS: go, run, walk, said, get, put, take, make, eat, play, work
-4. BASIC ADJECTIVES: good, bad, big, small, nice, cool, fun, awesome
-5. FEELING VERBS: feel, think, want, like, love, hate
-6. MOVEMENT VERBS: going, walking, running, moving, coming
-7. OVERUSED WORDS: thing, stuff, great, amazing, awesome
+1. INTENSIFIERS: very, really, so, quite
+2. BASIC EMOTIONS: sad, happy, mad, scared, 
+3. SIMPLE ACTION VERBS: go, run, walk, said
+4. BASIC ADJECTIVES: good, bad, big, small
+5. FEELING VERBS: feel, think, want, 
+6. MOVEMENT VERBS: going, walking, running
+7. OVERUSED WORDS: thing, stuff, great
 
 DO NOT include: 
-- Helper/linking verbs (am, is, are, was, were, be, been, have, has, had, do, does, did, will, would, could, should, can, may, might)
-- Articles (a, an, the)
-- Prepositions (in, on, at, to, for, with, by, from, of, about)
-- Pronouns (I, you, he, she, it, we, they, me, him, her, us, them, my, your, his, her, its, our, their)
-- Conjunctions (and, but, or, so, because, if, when, while)
-- Question words (how, what, where, when, why, who)
+- Helper/linking verbs (is, are, was, were, be, being, been)
+- Articles
+- Prepositions 
+- Pronouns 
+- Conjunctions 
 - Already advanced vocabulary
 
 Return valid JSON with exactly 3 age-appropriate synonyms per identified word:
 {"very":["extremely","incredibly","remarkably"],"love":["adore","cherish","treasure"],"sad":["unhappy","gloomy","downhearted"]}
 
-If no basic words found, return: {}`;
+If no basic words found, return: {}
+
+otherwise nothing`;
 
     const response = await AIService.generateText(prompt);
     console.log('🔍 Debug - AI response for "' + sentence + '":', response);
